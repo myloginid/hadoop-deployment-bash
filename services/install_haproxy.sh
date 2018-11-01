@@ -17,7 +17,7 @@
 exit 1
 
 echo "********************************************************************************"
-echo "*** $(basename $0)"
+echo "*** $(basename "$0")"
 echo "********************************************************************************"
 echo "Installing HAproxy..."
 yum -y -d1 -e1 install haproxy
@@ -28,6 +28,7 @@ cat <<EOF >/etc/haproxy/haproxy.cfg
 # CLAIRVOYANT
 # http://gethue.com/hadoop-tutorial-how-to-distribute-impala-query-load/
 # https://www.cloudera.com/documentation/enterprise/5-8-x/topics/impala_proxy.html
+# https://www.cloudera.com/documentation/enterprise/latest/topics/hue_sec_ha.html
 global
     log 127.0.0.1 local2
     chroot /var/lib/haproxy
@@ -51,7 +52,8 @@ defaults
 
 ## Setup for Oozie.
 #frontend oozie
-#    bind 0.0.0.0:11000
+#    bind 0.0.0.0:11000 # http
+##   bind 0.0.0.0:11443 # https
 #    mode http
 #    default_backend oozie_servers
 #    option httplog
@@ -62,6 +64,20 @@ defaults
 #    balance roundrobin
 #    server oozie1 OOZIEHOST1:11000 check
 #    server oozie2 OOZIEHOST2:11000 check
+
+## Setup for HttpFS.
+#frontend httpfs
+#    bind 0.0.0.0:14000
+#    mode http
+#    default_backend httpfs_servers
+#    option httplog
+#
+#backend httpfs_servers
+#    mode http
+#    option httplog
+#    balance roundrobin
+#    server httpfs0 HTTPFSHOST1:14000 check
+#    server httpfs1 HTTPFSHOST2:14000 check
 
 ## Setup for Hue.
 #frontend hue
@@ -83,6 +99,36 @@ defaults
 #    balance source
 #    server hue1 HUEHOST1:8888 cookie ServerA check inter 2s fall 3
 #    server hue2 HUEHOST2:8888 cookie ServerB check inter 2s fall 3
+
+## Setup for Solr.
+#frontend solr
+#    bind 0.0.0.0:8983 # http
+##   bind 0.0.0.0:8985 # https
+#    mode http
+#    default_backend solr_servers
+#    option httplog
+#
+#backend solr_servers
+#    mode http
+#    option httplog
+#    balance roundrobin
+#    server solr0 SOLRHOST1:8983 check
+#    server solr1 SOLRHOST2:8983 check
+#    server solr2 SOLRHOST2:8983 check
+#    server solr3 SOLRHOST2:8983 check
+#    server solr4 SOLRHOST2:8983 check
+
+### Setup for Solr Server.
+##listen solr
+##    bind 0.0.0.0:8983
+##    timeout client 1h
+##    timeout server 1h
+##    balance leastconn
+##    server solr0 SOLRHOST1:8983 check
+##    server solr1 SOLRHOST2:8983 check
+##    server solr2 SOLRHOST3:8983 check
+##    server solr3 SOLRHOST4:8983 check
+##    server solr4 SOLRHOST5:8983 check
 
 ## Setup for HiveServer2.
 #listen hiveserver2

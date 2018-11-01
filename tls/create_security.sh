@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2174
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,11 +16,13 @@
 # Copyright Clairvoyant 2015
 
 echo "********************************************************************************"
-echo "*** $(basename $0)"
+echo "*** $(basename "$0")"
 echo "********************************************************************************"
 echo "Making TLS security directories..."
 mkdir -p -m 0755 /opt/cloudera/security
 mkdir -p -m 0755 /opt/cloudera/security/x509
 mkdir -p -m 0755 /opt/cloudera/security/jks
 mkdir -p -m 0755 /opt/cloudera/security/CAcerts
+mkdir -p -m 0755 /opt/cloudera/security/keytabs
+mkdir -p -m 0755 /opt/cloudera/security/jaas
 

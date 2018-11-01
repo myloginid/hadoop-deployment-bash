@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2034,SC2086,SC1091
+# shellcheck disable=SC1091
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 #
 # Copyright Clairvoyant 2017
 #
-if [ $DEBUG ]; then set -x; fi
+if [ -n "$DEBUG" ]; then set -x; fi
 #
 ##### START CONFIG ###################################################
 
@@ -26,7 +26,7 @@ PG_SCHEMA=ambarischema
 PATH=/usr/bin:/usr/sbin:/bin:/sbin:/usr/local/bin
 
 # Function to print the help screen.
-print_help () {
+print_help() {
   echo "Usage:  $1 databaseType [options] databaseName databaseUser databasePassword"
   echo "        $1 [-H|--help]"
   echo "        $1 [-v|--version]"
@@ -43,7 +43,7 @@ print_help () {
 }
 
 # Function to check for root priviledges.
-check_root () {
+check_root() {
   if [[ $(/usr/bin/id | awk -F= '{print $2}' | awk -F"(" '{print $1}' 2>/dev/null) -ne 0 ]]; then
     echo "You must have root priviledges to run this program."
     exit 2
@@ -51,32 +51,40 @@ check_root () {
 }
 
 # Function to print and error message and exit.
-err_msg () {
+err_msg() {
   local CODE=$1
   echo "ERROR: Could not install required package. Exiting."
   exit "$CODE"
 }
 
 # Function to discover basic OS details.
-discover_os () {
+discover_os() {
   if command -v lsb_release >/dev/null; then
     # CentOS, Ubuntu
+    # shellcheck disable=SC2034
     OS=$(lsb_release -is)
     # 7.2.1511, 14.04
+    # shellcheck disable=SC2034
     OSVER=$(lsb_release -rs)
     # 7, 14
+    # shellcheck disable=SC2034
     OSREL=$(echo "$OSVER" | awk -F. '{print $1}')
     # trusty, wheezy, Final
+    # shellcheck disable=SC2034
     OSNAME=$(lsb_release -cs)
   else
     if [ -f /etc/redhat-release ]; then
       if [ -f /etc/centos-release ]; then
+        # shellcheck disable=SC2034
         OS=CentOS
       else
+        # shellcheck disable=SC2034
         OS=RedHatEnterpriseServer
       fi
-      OSVER=$(rpm -qf /etc/redhat-release --qf="%{VERSION}.%{RELEASE}\n")
-      OSREL=$(rpm -qf /etc/redhat-release --qf="%{VERSION}\n" | awk -F. '{print $1}')
+      # shellcheck disable=SC2034
+      OSVER=$(rpm -qf /etc/redhat-release --qf='%{VERSION}.%{RELEASE}\n')
+      # shellcheck disable=SC2034
+      OSREL=$(rpm -qf /etc/redhat-release --qf='%{VERSION}\n' | awk -F. '{print $1}')
     fi
   fi
 }
@@ -179,7 +187,7 @@ if [ -z "$DB_HOST" ] || [ -z "$DB_PORT" ] || [ -z "$ADMIN_USER" ] || [ -z "$ADMI
 check_root
 
 echo "********************************************************************************"
-echo "*** $(basename $0)"
+echo "*** $(basename "$0")"
 echo "********************************************************************************"
 # Check to see if we are on a supported OS.
 discover_os
@@ -193,12 +201,12 @@ set -eo pipefail
 echo "** Configuring Database..."
 if [ "$DB_TYPE" == postgresql ]; then
   if [ "$OS" == RedHatEnterpriseServer ] || [ "$OS" == CentOS ]; then
-    OPTS="--jdbc-driver=/usr/share/java/postgresql-jdbc.jar"
+    JOPTS=("--jdbc-driver=/usr/share/java/postgresql-jdbc.jar")
     if ! rpm -q postgresql >/dev/null 2>&1; then
       yum -y -e1 -d1 install postgresql
     fi
   elif [ "$OS" == Debian ] || [ "$OS" == Ubuntu ]; then
-    OPTS="--jdbc-driver=/usr/share/java/postgresql.jar"
+    JOPTS=("--jdbc-driver=/usr/share/java/postgresql.jar")
     if ! dpkg -l postgresql-client >/dev/null 2>&1; then
       export DEBIAN_FRONTEND=noninteractive
       apt-get -y -q install postgresql-client
@@ -215,12 +223,12 @@ if [ "$DB_TYPE" == postgresql ]; then
   export PGPASSWORD=$DB_PASSWD
   psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER"    -d "$DB_NAME" -c '\i /var/lib/ambari-server/resources/Ambari-DDL-Postgres-CREATE.sql;' 2>/dev/null
 
-  OPTS="$OPTS --jdbc-db=postgres --database=postgres"
-  OPTS="$OPTS --databasehost=$DB_HOST --databaseport=$DB_PORT --databaseusername=$DB_USER --databasepassword=$DB_PASSWD"
-  OPTS="$OPTS --databasename=$DB_NAME --postgresschema=$PG_SCHEMA"
+  JOPTS+=("--jdbc-db=postgres")
+  OPTS=("--databasehost=$DB_HOST" "--databaseport=$DB_PORT" "--databaseusername=$DB_USER" "--databasepassword=$DB_PASSWD")
+  OPTS+=("--databasename=$DB_NAME" "--database=postgres" "--postgresschema=$PG_SCHEMA")
 elif [ "$DB_TYPE" == mysql ]; then
   if [ "$OS" == RedHatEnterpriseServer ] || [ "$OS" == CentOS ]; then
-    OPTS="--jdbc-driver=/usr/share/java/mysql-connector-java.jar"
+    JOPTS=("--jdbc-driver=/usr/share/java/mysql-connector-java.jar")
     if [ "$OSREL" == 6 ]; then
       if ! rpm -q mysql >/dev/null 2>&1; then
         yum -y -e1 -d1 install mysql
@@ -231,7 +239,7 @@ elif [ "$DB_TYPE" == mysql ]; then
       fi
     fi
   elif [ "$OS" == Debian ] || [ "$OS" == Ubuntu ]; then
-    OPTS="--jdbc-driver=/usr/share/java/mysql-connector-java.jar"
+    JOPTS=("--jdbc-driver=/usr/share/java/mysql-connector-java.jar")
     if ! dpkg -l mysql-client >/dev/null 2>&1; then
       export DEBIAN_FRONTEND=noninteractive
       apt-get -y -q install mysql-client
@@ -243,19 +251,19 @@ elif [ "$DB_TYPE" == mysql ]; then
 # mysql -h "$DB_HOST" -P "$DB_PORT" -u "$ADMIN_USER" -p"${ADMIN_PASSWD}" -D "$DB_NAME" -e 'SOURCE /var/lib/ambari-server/resources/Ambari-DDL-MySQL-CREATE.sql;'
   mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER"    -p"${DB_PASSWD}"    -D "$DB_NAME" -e 'SOURCE /var/lib/ambari-server/resources/Ambari-DDL-MySQL-CREATE.sql;'
 
-  OPTS="$OPTS --jdbc-db=mysql --database=mysql"
-  OPTS="$OPTS --databasehost=$DB_HOST --databaseport=$DB_PORT --databaseusername=$DB_USER --databasepassword=$DB_PASSWD"
-  OPTS="$OPTS --databasename=$DB_NAME"
+  JOPTS+=("--jdbc-db=mysql")
+  OPTS=("--databasehost=$DB_HOST" "--databaseport=$DB_PORT" "--databaseusername=$DB_USER" "--databasepassword=$DB_PASSWD")
+  OPTS+=("--databasename=$DB_NAME" "--database=mysql")
 elif [ "$DB_TYPE" == oracle ]; then
   if [ -z "$DB_PORT" ]; then print_help "$(basename "$0")"; fi
   echo "WARNING: Oracle Support is not implemented."
   exit 20
   #/var/lib/ambari-server/resources/Ambari-DDL-Oracle-CREATE.sql
-  OPTS="--jdbc-driver=/usr/share/java/oracle-connector-java.jar"
+  JOPTS=("--jdbc-driver=/usr/share/java/oracle-connector-java.jar")
 
-  OPTS="$OPTS --jdbc-db=oracle --database=oracle"
-  OPTS="$OPTS --databasehost=$DB_HOST --databaseport=$DB_PORT --databaseusername=$DB_USER --databasepassword=$DB_PASSWD"
-  OPTS="$OPTS --databasename=$DB_NAME --sidorsname=sid"
+  JOPTS+=("--jdbc-db=oracle")
+  OPTS=("--databasehost=$DB_HOST" "--databaseport=$DB_PORT" "--databaseusername=$DB_USER" "--databasepassword=$DB_PASSWD")
+  OPTS+=("--databasename=$DB_NAME" "--database=oracle" "--sidorsname=sid")
 else
   echo "WARNING: You should not have gotten here."
 fi
@@ -266,5 +274,17 @@ if [ -f /etc/profile.d/java.sh ]; then
 elif [ -f /etc/profile.d/jdk.sh ]; then
   . /etc/profile.d/jdk.sh
 fi
-ambari-server setup --java-home="$JAVA_HOME" $OPTS
+rm -f /tmp/$$
+cat <<EOF >/tmp/$$
+
+
+
+
+
+
+
+EOF
+ambari-server setup --java-home="$JAVA_HOME" "${OPTS[@]}" < /tmp/$$
+ambari-server setup --java-home="$JAVA_HOME" "${JOPTS[@]}"
+rm -f /tmp/$$
 
